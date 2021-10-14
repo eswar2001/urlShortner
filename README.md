@@ -7,7 +7,7 @@
 ![GitHub forks](https://img.shields.io/github/forks/seswar2001/urlShortner?style=social)
 ![Twitter Follow](https://img.shields.io/twitter/follow/_eswar2001?style=social)
 
-Project name is urlShortner that allows layman to find blood donors or make your d=first step in becomming a Blood Donor.
+Project name is urlShortner that allows you to create a short url's to share.
 
 ## Using urlShortner
 
