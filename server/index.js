@@ -1,8 +1,23 @@
 const redis = require('redis');
-const client = redis.createClient(6379, '127.0.0.1');
 const md5 = require('md5');
 const { AbortError, AggregateError, ReplyError } = require("redis");
-
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const dateTime = require('util')
+const app = express();
+const router = express.Router();
+//linking bodyparser
+app.use(express.json());
+//linking cors
+app.use(cors());
+//linking express router
+app.use(router);
+//connection with redis
+const client = redis.createClient(6379, '127.0.0.1');
+//synchronization counter
+let counter = 0;
+//redis connection stats
 client.on('connect', function () {
     console.log('Connected!');
 });
@@ -15,41 +30,85 @@ client.on("error", function (err) {
     assert.strictEqual(err.errors.length, 2);
     assert.strictEqual(err.code, "NR_CLOSED");
 });
-// Strings
+//server routes
+app.get('/', (req, res) => {
+    res.status(200).send('Hi! there');
+});
+app.get('/:string/:string/', (req, res) => {
+    console.log(req.hostname);
+    let shortUrl = req.path.slice(1, req.path.length);
+    client.exists(shortUrl, function (err, reply) {
+        if (reply === 1) {
+            client.HGETALL(shortUrl, function (err, object) {
+                res.status(400).redirect(object.longUrl);
+            });
+        } else {
+            res.status(400).redirect(`http://${req.hostname}/404`);
+        }
+    });
+});
+app.post('/create', (req, res) => {
+    try {
+        let longUrl = req.body['longUrl'];
+        let month = new Date().getMonth();
+        let day = new Date().getUTCDate();
+        let year = new Date().getUTCFullYear();
+        let present = new Date();
+        present = present.toISOString();
+        let computedUrl = md5(`${present}:${longUrl}`);
+        let shortUrl = day.toString() + month.toString() + year.toString() + '/' + computedUrl.slice(0, 6);
+        client.exists(shortUrl, function (err, reply) {
+            if (reply === 1) {
+                client.HGETALL(shortUrl, function (err, object) {
+                    if (longUrl == object.longUrl) {
+                        res.status(200).json(object);
+                    }
+                    else {
+                        shortUrl = day.toString() + month.toString() + year.toString() + '/' + computedUrl.slice(0, 6) + '/' + counter.toString();
+                        counter += 1;
+                        client.HMSET(shortUrl, 'longUrl', longUrl, 'computedUrl', computedUrl, 'shortUrl', shortUrl, 'timestamp', present);
+                        res.status(200).json({ shortUrl, longUrl, computedUrl });
+                    }
+                });
+            } else {
+                client.HMSET(shortUrl, 'longUrl', longUrl, 'computedUrl', computedUrl, 'shortUrl', shortUrl, 'timestamp', present);
+                client.EXPIRE(shortUrl, 1296000);
+                res.status(200).json({ shortUrl, longUrl, computedUrl });
+            }
+        });
+    }
+    catch (e) {
+        console.log(e);
+        res.status(500).send(e);
+    }
+});
 
-// client.set('framework', 'ReactJS', function (err, reply) {
-//     console.log(reply); // OK
-// });
+app.post('/delete', (req, res) => {
+    try {
+        let shortUrl = req.body['shortUrl'];
+        client.exists(shortUrl, function (err, reply) {
+            if (reply == 1) {
+                client.del(shortUrl, function (err, response) {
+                    if (response == 1) {
 
-// client.get('framework', function (err, reply) {
-//     console.log(reply); // ReactJS
-// });
+                        res.status(200).json({ 'message': 'Deleted Successfully!' });
+                        console.log("Deleted Successfully!");
+                    } else {
+                        res.status(200).json({ 'message': 'cannot delete' });
+                    }
+                });
+            } else {
+                res.status(200).json({ 'message': 'Short URL dosen\'t exist' });
+            }
+        });
+    } catch (e) {
+        res.status(500).json(e);
+    }
+});
 
-// // Hashes
-
-// client.hmset('frameworks_hash', 'javascript', 'ReactJS', 'css', 'TailwindCSS', 'node', 'Express');
-
-// client.hgetall('frameworks_hash', function (err, object) {
-//     console.log(object); // { javascript: 'ReactJS', css: 'TailwindCSS', node: 'Express' }
-// });
-// client.rpush(['frameworks_list', 'ReactJS', 'Angular'], function (err, reply) {
-//     console.log(reply); // 2
-// });
-
-// client.lrange('frameworks_list', 0, -1, function (err, reply) {
-//     console.log(reply); // [ 'ReactJS', 'Angular' ]
-// });
-
-// client.exists('framework', function (err, reply) {
-//     if (reply === 1) {
-//         console.log('Exists!');
-//     } else {
-//         console.log('Doesn\'t exist!');
-//     }
-// });
-
-// client.del('frameworks_list', function (err, reply) {
-//     console.log(reply); // 1
-// });
-// client.set('status', 'logged_in');
-// client.expire('status', 300);
+//server port
+const PORT = process.env.PORT || 8000;
+//server listing to [PORT]
+app.listen(PORT, () => {
+    console.log(`Listening at ${PORT}`)
+});
