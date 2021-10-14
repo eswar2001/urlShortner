@@ -34,6 +34,8 @@ Our URL shortening system should meet the following requirements:
 
 To use urlShortner, follow these steps:
 
+Note: Don't forget change your redis hostname and port no.
+
 ```
 git clone https://github.com/eswar2001/urlShortner.git
 cd urlShortner
